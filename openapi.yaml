@@ -1,0 +1,2067 @@
+openapi: 3.0.3
+info:
+  title: Carecensus
+  version: 0.1.0
+  description: >-
+    Discovery-first inventory and clearance-to-scale register for every algorithm
+    influencing care or money inside a health system. Carecensus reconciles the
+    register against the running estate to surface undeclared deployments,
+    forces a regulatory determination and a local validation with subgroup results,
+    blocks benefit claims without a pre-period baseline, gates any expansion of
+    scope, and reconciles realised value with finance under an agreed attribution
+    rule.
+  x-product-slug: ai-health-carecensus
+  x-source: ai-in-health/Accenture-Chart-Healthcare-Ranks-1-for-AI-Use/
+servers:
+  - url: https://api.example.com
+tags:
+  - name: Register
+    description: Deployment register, versions, owners, and vendors
+  - name: Discovery
+    description: Reconciliation of the register against the running estate
+  - name: Classification
+    description: Device determinations, intended use, and off-label acceptance
+  - name: Validation
+    description: Local and vendor validation studies with subgroup results
+  - name: Gates
+    description: Lifecycle gate reviews, conditions, decisions, and scope control
+  - name: Monitoring
+    description: Drift and utilisation signals, lapse detection, and safety linkage
+  - name: Value Realization
+    description: Baselines, hypotheses, cost of ownership, and reconciled statements
+  - name: Portfolio Governance
+    description: Duplication decisions, disclosures, decommissioning, and portfolio reporting
+paths:
+  /v1/deployments:
+    get:
+      operationId: listDeployments
+      tags: [Register]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: lifecycleStage
+          in: query
+          schema:
+            $ref: "#/components/schemas/LifecycleStage"
+        - name: provenance
+          in: query
+          schema:
+            $ref: "#/components/schemas/DeploymentProvenance"
+        - name: unmeasurable
+          in: query
+          description: Deployments with no pre-period baseline, therefore unable to claim benefit
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Deployments page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListEnvelopeDeployment"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: registerDeployment
+      tags: [Register]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeploymentCreate"
+      responses:
+        "201":
+          description: Deployment registered at intake stage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeDeployment"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+  /v1/deployments/{deploymentId}:
+    parameters:
+      - $ref: "#/components/parameters/DeploymentId"
+    get:
+      operationId: getDeployment
+      tags: [Register]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Deployment record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeDeployment"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /v1/deployments/{deploymentId}/versions:
+    parameters:
+      - $ref: "#/components/parameters/DeploymentId"
+    get:
+      operationId: listDeploymentVersions
+      tags: [Register]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Version history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListEnvelopeDeploymentVersion"
+    post:
+      operationId: recordDeploymentVersion
+      tags: [Register]
+      description: >-
+        Records a new model or configuration version. A version change on a learning
+        model must reference its predetermined change-control basis.
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeploymentVersion"
+      responses:
+        "201":
+          description: Version recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeDeploymentVersion"
+  /v1/vendors:
+    get:
+      operationId: listVendors
+      tags: [Register]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Vendors with portfolio concentration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListEnvelopeVendorRecord"
+  /v1/discovery/findings:
+    get:
+      operationId: listDiscoveryFindings
+      tags: [Discovery]
+      description: >-
+        Algorithms observed in the estate — EHR configuration, imaging manifests,
+        contracts, payer files, research protocols — with no matching register entry.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [unreconciled, matched, registered, dismissed]
+      responses:
+        "200":
+          description: Discovery findings page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListEnvelopeDiscoveryFinding"
+    post:
+      operationId: submitDiscoveryScan
+      tags: [Discovery]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiscoveryScanSubmission"
+      responses:
+        "202":
+          description: Scan accepted for reconciliation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeDiscoveryFinding"
+  /v1/discovery/findings/{findingId}/reconciliation:
+    parameters:
+      - name: findingId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: reconcileDiscoveryFinding
+      tags: [Discovery]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resolution, resolvedBy]
+              properties:
+                resolution:
+                  type: string
+                  enum: [matched_existing, registered_new, dismissed_not_an_algorithm, dismissed_out_of_scope]
+                deploymentId:
+                  type: string
+                resolvedBy:
+                  type: string
+                rationale:
+                  type: string
+      responses:
+        "200":
+          description: Finding reconciled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeDiscoveryFinding"
+  /v1/deployments/{deploymentId}/regulatory-determination:
+    parameters:
+      - $ref: "#/components/parameters/DeploymentId"
+    put:
+      operationId: setRegulatoryDetermination
+      tags: [Classification]
+      description: >-
+        Records the device determination and the reasoning behind it, including
+        whether the output is time-critical and whether the clinician can
+        independently review the basis for the recommendation.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegulatoryDetermination"
+      responses:
+        "200":
+          description: Determination recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeRegulatoryDetermination"
+        "403":
+          description: Caller does not hold regulatory determination authority
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /v1/deployments/{deploymentId}/intended-use:
+    parameters:
+      - $ref: "#/components/parameters/DeploymentId"
+    put:
+      operationId: setIntendedUseRecord
+      tags: [Classification]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IntendedUseRecord"
+      responses:
+        "200":
+          description: Intended use and clearance conditions recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeIntendedUseRecord"
+  /v1/deployments/{deploymentId}/off-label-acceptances:
+    parameters:
+      - $ref: "#/components/parameters/DeploymentId"
+    post:
+      operationId: acceptOffLabelUse
+      tags: [Classification]
+      description: >-
+        Explicit, signed acceptance that the deployment operates outside the cleared
+        intended-use conditions, with the risk owner named.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deviation, riskOwnerId, approvedBy]
+              properties:
+                deviation:
+                  type: string
+                  enum: [population_outside_label, workflow_outside_label, output_used_differently, unsupported_claim, monitoring_condition_not_met]
+                detail:
+                  type: string
+                riskOwnerId:
+                  type: string
+                approvedBy:
+                  type: string
+                reviewBy:
+                  type: string
+                  format: date
+      responses:
+        "201":
+          description: Off-label acceptance recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeIntendedUseRecord"
+  /v1/deployments/{deploymentId}/validation-studies:
+    parameters:
+      - $ref: "#/components/parameters/DeploymentId"
+    get:
+      operationId: listValidationStudies
+      tags: [Validation]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Validation studies page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListEnvelopeValidationStudy"
+    post:
+      operationId: submitValidationStudy
+      tags: [Validation]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValidationStudyCreate"
+      responses:
+        "201":
+          description: Study recorded with subgroup results and data completeness
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeValidationStudy"
+        "422":
+          description: Subgroup results or demographic completeness missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /v1/deployments/{deploymentId}/subgroup-mitigations:
+    parameters:
+      - $ref: "#/components/parameters/DeploymentId"
+    post:
+      operationId: approveSubgroupMitigation
+      tags: [Validation]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subgroup, measure, plan, approvedBy]
+              properties:
+                subgroup:
+                  type: string
+                measure:
+                  type: string
+                gapMagnitude:
+                  type: number
+                  format: float
+                plan:
+                  type: string
+                approvedBy:
+                  type: string
+                reassessBy:
+                  type: string
+                  format: date
+      responses:
+        "201":
+          description: Mitigation approved, scaling block released
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeSubgroupResult"
+  /v1/deployments/{deploymentId}/baseline:
+    parameters:
+      - $ref: "#/components/parameters/DeploymentId"
+    post:
+      operationId: recordBaselineMeasurement
+      tags: [Value Realization]
+      description: >-
+        Pre-period measurement of the stated benefit measure. Must be recorded
+        before go-live; afterwards the deployment is permanently unmeasurable.
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BaselineMeasurement"
+      responses:
+        "201":
+          description: Baseline recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeBaselineMeasurement"
+        "409":
+          description: Deployment already live, baseline window closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /v1/deployments/{deploymentId}/benefit-hypothesis:
+    parameters:
+      - $ref: "#/components/parameters/DeploymentId"
+    put:
+      operationId: setBenefitHypothesis
+      tags: [Value Realization]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BenefitHypothesis"
+      responses:
+        "200":
+          description: Hypothesis recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeBenefitHypothesis"
+  /v1/deployments/{deploymentId}/cost-of-ownership:
+    parameters:
+      - $ref: "#/components/parameters/DeploymentId"
+    put:
+      operationId: setTotalCostOfOwnership
+      tags: [Value Realization]
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TotalCostOfOwnership"
+      responses:
+        "200":
+          description: Cost of ownership recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeTotalCostOfOwnership"
+  /v1/gate-reviews:
+    get:
+      operationId: listGateReviews
+      tags: [Gates]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, submitted, evidence_incomplete, in_review, decided, withdrawn]
+      responses:
+        "200":
+          description: Gate reviews page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListEnvelopeGateReview"
+    post:
+      operationId: submitGateReview
+      tags: [Gates]
+      description: >-
+        Requests advancement to the next lifecycle stage. Evidence requirements are
+        derived from the deployment's classification and clinical reach.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GateReviewCreate"
+      responses:
+        "201":
+          description: Gate review submitted with evidence checklist state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeGateReview"
+        "422":
+          description: Required evidence missing for this classification and reach
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /v1/gate-reviews/{gateReviewId}/decision:
+    parameters:
+      - name: gateReviewId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: decideGateReview
+      tags: [Gates]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GateDecisionCreate"
+      responses:
+        "200":
+          description: Gate decided
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeGateReview"
+        "403":
+          description: Model owners may not approve their own advancement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /v1/deployments/{deploymentId}/scope:
+    parameters:
+      - $ref: "#/components/parameters/DeploymentId"
+    get:
+      operationId: getDeploymentScope
+      tags: [Gates]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Approved scope versus observed scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeDeploymentScope"
+  /v1/deployments/{deploymentId}/suspension:
+    parameters:
+      - $ref: "#/components/parameters/DeploymentId"
+    post:
+      operationId: suspendDeployment
+      tags: [Gates]
+      description: >-
+        Suspends a deployment for scope creep, lapsed monitoring, a departed owner,
+        or an unmitigated subgroup gap.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason, suspendedBy]
+              properties:
+                reason:
+                  type: string
+                  enum: [scope_creep, monitoring_lapsed, owner_departed, subgroup_gap, safety_event, regulatory_change]
+                detail:
+                  type: string
+                suspendedBy:
+                  type: string
+      responses:
+        "202":
+          description: Suspension accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeDeployment"
+  /v1/monitoring/signals:
+    get:
+      operationId: listMonitoringSignals
+      tags: [Monitoring]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: deploymentId
+          in: query
+          schema:
+            type: string
+        - name: signalType
+          in: query
+          schema:
+            type: string
+            enum: [performance_drift, calibration_drift, input_shift, utilisation_drop, override_rate, subgroup_divergence]
+      responses:
+        "200":
+          description: Monitoring signals page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListEnvelopeMonitoringSignal"
+    post:
+      operationId: ingestMonitoringSignal
+      tags: [Monitoring]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MonitoringSignal"
+      responses:
+        "201":
+          description: Signal bound to deployment version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeMonitoringSignal"
+  /v1/monitoring/lapses:
+    get:
+      operationId: listMonitoringLapses
+      tags: [Monitoring]
+      description: >-
+        Live deployments whose monitoring commitment has expired or whose accountable
+        owner is no longer active, flagged for suspension.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Lapsed deployments page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListEnvelopeDeployment"
+  /v1/deployments/{deploymentId}/safety-event-links:
+    parameters:
+      - $ref: "#/components/parameters/DeploymentId"
+    post:
+      operationId: linkSafetyEvent
+      tags: [Monitoring]
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SafetyEventLink"
+      responses:
+        "201":
+          description: Safety event linked and surfaced in future gate reviews
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeSafetyEventLink"
+  /v1/value/attribution-rules:
+    get:
+      operationId: listAttributionRules
+      tags: [Value Realization]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Attribution rules agreed with finance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListEnvelopeAttributionRule"
+    post:
+      operationId: agreeAttributionRule
+      tags: [Value Realization]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttributionRule"
+      responses:
+        "201":
+          description: Attribution rule agreed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeAttributionRule"
+  /v1/value/statements:
+    get:
+      operationId: listRealizedValueStatements
+      tags: [Value Realization]
+      description: >-
+        Realised benefit against hypothesis, net of cost of ownership. Null and
+        negative results are returned on the same terms as positive ones.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: outcome
+          in: query
+          schema:
+            type: string
+            enum: [exceeded, met, partial, null_result, negative, unmeasurable]
+      responses:
+        "200":
+          description: Realised value statements page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListEnvelopeRealizedValueStatement"
+  /v1/value/statements/{statementId}/reconciliation:
+    parameters:
+      - $ref: "#/components/parameters/StatementId"
+    post:
+      operationId: reconcileRealizedValueStatement
+      tags: [Value Realization]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [signatory, role]
+              properties:
+                signatory:
+                  type: string
+                role:
+                  type: string
+                  enum: [model_owner, finance_business_partner, quality, internal_audit]
+                ledgerReference:
+                  type: string
+                note:
+                  type: string
+      responses:
+        "200":
+          description: Statement reconciled and signed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeRealizedValueStatement"
+  /v1/portfolio/duplication-findings:
+    get:
+      operationId: listDuplicationFindings
+      tags: [Portfolio Governance]
+      description: Functional overlap across service lines with attached spend.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Duplication findings page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListEnvelopeDuplicationFinding"
+  /v1/portfolio/duplication-findings/{findingId}/decision:
+    parameters:
+      - name: findingId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: decideDuplicationFinding
+      tags: [Portfolio Governance]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision, decidedBy]
+              properties:
+                decision:
+                  type: string
+                  enum: [consolidate, coexist, defer]
+                retainedDeploymentId:
+                  type: string
+                decidedBy:
+                  type: string
+                rationale:
+                  type: string
+      responses:
+        "200":
+          description: Duplication decision recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeDuplicationFinding"
+  /v1/deployments/{deploymentId}/disclosures:
+    parameters:
+      - $ref: "#/components/parameters/DeploymentId"
+    post:
+      operationId: recordDisclosure
+      tags: [Portfolio Governance]
+      description: >-
+        Evidence that clinicians at the point of use, and patients where required,
+        were told what the model is, what it was validated on, and its limitations.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DisclosureRecord"
+      responses:
+        "201":
+          description: Disclosure recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeDisclosureRecord"
+  /v1/deployments/{deploymentId}/decommission:
+    parameters:
+      - $ref: "#/components/parameters/DeploymentId"
+    post:
+      operationId: decommissionDeployment
+      tags: [Portfolio Governance]
+      description: >-
+        No-fault retirement covering clinician notification, workflow reversion, data
+        disposition, and contract termination.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DecommissionRecord"
+      responses:
+        "201":
+          description: Decommissioning recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeDecommissionRecord"
+  /v1/portfolio/statements:
+    get:
+      operationId: getPortfolioStatement
+      tags: [Portfolio Governance]
+      description: >-
+        Board, accreditation, and regulator view of the whole portfolio, optionally
+        reconstructed as it stood on a past date.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: asOf
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Portfolio statement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopePortfolioStatement"
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    DeploymentId:
+      name: deploymentId
+      in: path
+      required: true
+      schema:
+        type: string
+    StatementId:
+      name: statementId
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    UnprocessableEntity:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    ResponseMeta:
+      type: object
+      required: [requestId, timestamp]
+      properties:
+        requestId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+    Money:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount:
+          type: number
+          format: double
+        currency:
+          type: string
+          example: USD
+    LifecycleStage:
+      type: string
+      enum: [intake, classified, validated, limited_deployment, scaled_deployment, sustained, suspended, retired]
+    DeploymentProvenance:
+      type: string
+      enum: [internally_built, ehr_vendor_module, imaging_or_device_embedded, revenue_cycle_vendor, payer_supplied, research_origin, departmental_purchase]
+    ClinicalReach:
+      type: string
+      enum: [administrative_only, clinician_facing_advisory, clinician_facing_actionable, patient_facing, autonomous_action]
+    Deployment:
+      type: object
+      required: [id, name, provenance, lifecycleStage, clinicalReach]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        functionDescription:
+          type: string
+          description: What decision or payment this algorithm influences, in business language
+        provenance:
+          $ref: "#/components/schemas/DeploymentProvenance"
+        vendorId:
+          type: string
+        lifecycleStage:
+          $ref: "#/components/schemas/LifecycleStage"
+        clinicalReach:
+          $ref: "#/components/schemas/ClinicalReach"
+        serviceLines:
+          type: array
+          items:
+            type: string
+        accountableOwnerId:
+          type: string
+        ownerActive:
+          type: boolean
+        currentVersionId:
+          type: string
+        determinationStatus:
+          type: string
+          enum: [not_started, in_progress, recorded, disputed]
+        baselineRecorded:
+          type: boolean
+        unmeasurable:
+          type: boolean
+          description: True when the deployment went live without a pre-period baseline
+        monitoringCommitmentExpiresOn:
+          type: string
+          format: date
+        suspendedReason:
+          type: string
+        goLiveAt:
+          type: string
+          format: date-time
+    DeploymentCreate:
+      type: object
+      required: [name, functionDescription, provenance, clinicalReach, accountableOwnerId]
+      properties:
+        name:
+          type: string
+        functionDescription:
+          type: string
+        provenance:
+          $ref: "#/components/schemas/DeploymentProvenance"
+        vendorId:
+          type: string
+        clinicalReach:
+          $ref: "#/components/schemas/ClinicalReach"
+        serviceLines:
+          type: array
+          items:
+            type: string
+        accountableOwnerId:
+          type: string
+        discoveryFindingId:
+          type: string
+    DeploymentVersion:
+      type: object
+      required: [deploymentId, versionLabel, effectiveFrom]
+      properties:
+        id:
+          type: string
+        deploymentId:
+          type: string
+        versionLabel:
+          type: string
+        effectiveFrom:
+          type: string
+          format: date-time
+        changeType:
+          type: string
+          enum: [initial, retrain, threshold_change, configuration_change, vendor_upgrade, feature_change]
+        learningModel:
+          type: boolean
+        changeControlBasis:
+          type: string
+          description: Predetermined change-control reference where the model continues to learn
+        vendorReleaseNote:
+          type: string
+    VendorRecord:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        deploymentCount:
+          type: integer
+        annualSpend:
+          $ref: "#/components/schemas/Money"
+        businessAssociateAgreementOnFile:
+          type: boolean
+        portfolioConcentrationPercent:
+          type: number
+          format: float
+    DiscoveryFinding:
+      type: object
+      required: [id, sourceSystem, observedFunction, status]
+      properties:
+        id:
+          type: string
+        sourceSystem:
+          type: string
+          enum: [ehr_configuration, interface_log, imaging_manifest, contract_record, payer_file, research_protocol, expense_report]
+        observedFunction:
+          type: string
+        observedAt:
+          type: string
+          format: date-time
+        candidateDeploymentId:
+          type: string
+        status:
+          type: string
+          enum: [unreconciled, matched, registered, dismissed]
+        resolution:
+          type: string
+        resolvedBy:
+          type: string
+        clinicalReachEstimate:
+          $ref: "#/components/schemas/ClinicalReach"
+    DiscoveryScanSubmission:
+      type: object
+      required: [sourceSystem, observations]
+      properties:
+        sourceSystem:
+          type: string
+          enum: [ehr_configuration, interface_log, imaging_manifest, contract_record, payer_file, research_protocol, expense_report]
+        scannedAt:
+          type: string
+          format: date-time
+        observations:
+          type: array
+          items:
+            type: object
+            properties:
+              observedFunction:
+                type: string
+              identifier:
+                type: string
+              detail:
+                type: string
+    RegulatoryDetermination:
+      type: object
+      required: [classification, reasoning, determinedBy]
+      properties:
+        classification:
+          type: string
+          enum: [not_a_device, exempt_clinical_decision_support, class_ii_cleared, class_iii, enforcement_discretion, under_review]
+        timeCriticalOutput:
+          type: boolean
+        basisIndependentlyReviewable:
+          type: boolean
+          description: Whether the clinician can independently review the basis for the recommendation
+        drivesDiagnosisOrTreatment:
+          type: boolean
+        reasoning:
+          type: string
+        determinedBy:
+          type: string
+        determinedAt:
+          type: string
+          format: date-time
+        clearanceReference:
+          type: string
+        researchOrOperations:
+          type: string
+          enum: [research_protocol, quality_improvement, routine_operations]
+    IntendedUseRecord:
+      type: object
+      required: [statedIntendedUse]
+      properties:
+        statedIntendedUse:
+          type: string
+        indicatedPopulation:
+          type: string
+        clearanceConditions:
+          type: array
+          items:
+            type: string
+        approvedWorkflow:
+          type: string
+        offLabelAcceptances:
+          type: array
+          items:
+            type: object
+            properties:
+              deviation:
+                type: string
+              riskOwnerId:
+                type: string
+              approvedBy:
+                type: string
+              approvedAt:
+                type: string
+                format: date-time
+              reviewBy:
+                type: string
+                format: date
+    SubgroupResult:
+      type: object
+      required: [subgroupDimension, cohort, measure, value]
+      properties:
+        subgroupDimension:
+          type: string
+          enum: [age_band, sex, race_ethnicity, language, payer_class, disability, geography]
+        cohort:
+          type: string
+        measure:
+          type: string
+          example: sensitivity
+        value:
+          type: number
+          format: float
+        referenceValue:
+          type: number
+          format: float
+        gapMagnitude:
+          type: number
+          format: float
+        demographicCompletenessPercent:
+          type: number
+          format: float
+          description: Share of the study population with this demographic attribute recorded
+        blocksScaling:
+          type: boolean
+        mitigationPlan:
+          type: string
+        mitigationApprovedBy:
+          type: string
+    ValidationStudy:
+      type: object
+      required: [id, deploymentId, studyType, populationDescription, overallResults]
+      properties:
+        id:
+          type: string
+        deploymentId:
+          type: string
+        deploymentVersionId:
+          type: string
+        studyType:
+          type: string
+          enum: [vendor_supplied, local_retrospective, local_prospective, silent_trial, external_literature]
+        populationDescription:
+          type: string
+        populationMatchNote:
+          type: string
+          description: How the study population differs from the population it will be used on
+        sampleSize:
+          type: integer
+        prevalence:
+          type: number
+          format: float
+        overallResults:
+          type: object
+          additionalProperties:
+            type: number
+            format: float
+        calibrationNote:
+          type: string
+        subgroupResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubgroupResult"
+        dataUseBasis:
+          type: string
+          enum: [treatment_operations, limited_data_set, waiver_of_authorisation, patient_authorisation, de_identified]
+        businessAssociateAgreementRef:
+          type: string
+        conductedBy:
+          type: string
+        completedAt:
+          type: string
+          format: date
+    ValidationStudyCreate:
+      type: object
+      required: [studyType, populationDescription, overallResults, subgroupResults, dataUseBasis]
+      properties:
+        deploymentVersionId:
+          type: string
+        studyType:
+          type: string
+          enum: [vendor_supplied, local_retrospective, local_prospective, silent_trial, external_literature]
+        populationDescription:
+          type: string
+        populationMatchNote:
+          type: string
+        sampleSize:
+          type: integer
+        overallResults:
+          type: object
+          additionalProperties:
+            type: number
+            format: float
+        subgroupResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubgroupResult"
+        dataUseBasis:
+          type: string
+          enum: [treatment_operations, limited_data_set, waiver_of_authorisation, patient_authorisation, de_identified]
+        businessAssociateAgreementRef:
+          type: string
+    BenefitHypothesis:
+      type: object
+      required: [measure, direction, targetChange, evaluationWindowMonths]
+      properties:
+        measure:
+          type: string
+          example: 30-day readmission rate for heart failure discharges
+        direction:
+          type: string
+          enum: [decrease, increase]
+        targetChange:
+          type: number
+          format: float
+        unit:
+          type: string
+        evaluationWindowMonths:
+          type: integer
+        financialTranslation:
+          type: string
+        paymentRegime:
+          type: string
+          enum: [fee_for_service, value_based, mixed, administrative_cost]
+        attributionRuleId:
+          type: string
+    BaselineMeasurement:
+      type: object
+      required: [measure, value, periodStart, periodEnd]
+      properties:
+        measure:
+          type: string
+        value:
+          type: number
+          format: float
+        unit:
+          type: string
+        periodStart:
+          type: string
+          format: date
+        periodEnd:
+          type: string
+          format: date
+        cohortDefinition:
+          type: string
+        sourceSystem:
+          type: string
+        recordedBy:
+          type: string
+        recordedAt:
+          type: string
+          format: date-time
+    TotalCostOfOwnership:
+      type: object
+      required: [periodMonths]
+      properties:
+        periodMonths:
+          type: integer
+        licenceCost:
+          $ref: "#/components/schemas/Money"
+        integrationCost:
+          $ref: "#/components/schemas/Money"
+        validationCost:
+          $ref: "#/components/schemas/Money"
+        monitoringCost:
+          $ref: "#/components/schemas/Money"
+        clinicianTimeCost:
+          $ref: "#/components/schemas/Money"
+        totalCost:
+          $ref: "#/components/schemas/Money"
+        ledgerReference:
+          type: string
+    GateReview:
+      type: object
+      required: [id, deploymentId, fromStage, toStage, status]
+      properties:
+        id:
+          type: string
+        deploymentId:
+          type: string
+        fromStage:
+          $ref: "#/components/schemas/LifecycleStage"
+        toStage:
+          $ref: "#/components/schemas/LifecycleStage"
+        status:
+          type: string
+          enum: [draft, submitted, evidence_incomplete, in_review, decided, withdrawn]
+        requiredEvidence:
+          type: array
+          items:
+            type: object
+            properties:
+              item:
+                type: string
+              satisfied:
+                type: boolean
+              reference:
+                type: string
+        linkedSafetyEventIds:
+          type: array
+          items:
+            type: string
+        submittedBy:
+          type: string
+        submittedAt:
+          type: string
+          format: date-time
+        decision:
+          $ref: "#/components/schemas/GateDecision"
+    GateReviewCreate:
+      type: object
+      required: [deploymentId, toStage, submittedBy]
+      properties:
+        deploymentId:
+          type: string
+        toStage:
+          $ref: "#/components/schemas/LifecycleStage"
+        submittedBy:
+          type: string
+        requestedScope:
+          $ref: "#/components/schemas/DeploymentScope"
+        evidenceReferences:
+          type: array
+          items:
+            type: string
+    GateDecisionCreate:
+      type: object
+      required: [outcome, decidedBy, rationale]
+      properties:
+        outcome:
+          type: string
+          enum: [approved, approved_with_conditions, deferred, rejected]
+        decidedBy:
+          type: string
+        committee:
+          type: string
+        rationale:
+          type: string
+        conditions:
+          type: array
+          items:
+            type: object
+            properties:
+              condition:
+                type: string
+              dueBy:
+                type: string
+                format: date
+              ownerId:
+                type: string
+        approvedScope:
+          $ref: "#/components/schemas/DeploymentScope"
+    GateDecision:
+      type: object
+      required: [outcome, decidedBy, decidedAt]
+      properties:
+        outcome:
+          type: string
+          enum: [approved, approved_with_conditions, deferred, rejected]
+        decidedBy:
+          type: string
+        committee:
+          type: string
+        decidedAt:
+          type: string
+          format: date-time
+        rationale:
+          type: string
+        conditions:
+          type: array
+          items:
+            type: object
+            properties:
+              condition:
+                type: string
+              dueBy:
+                type: string
+                format: date
+              ownerId:
+                type: string
+              satisfied:
+                type: boolean
+    DeploymentScope:
+      type: object
+      properties:
+        sites:
+          type: array
+          items:
+            type: string
+        serviceLines:
+          type: array
+          items:
+            type: string
+        populationDescription:
+          type: string
+        workflowDescription:
+          type: string
+        observedSites:
+          type: array
+          items:
+            type: string
+        scopeCreepDetected:
+          type: boolean
+        creepDetail:
+          type: string
+    MonitoringSignal:
+      type: object
+      required: [deploymentId, signalType, observedAt]
+      properties:
+        id:
+          type: string
+        deploymentId:
+          type: string
+        deploymentVersionId:
+          type: string
+        signalType:
+          type: string
+          enum: [performance_drift, calibration_drift, input_shift, utilisation_drop, override_rate, subgroup_divergence]
+        observedAt:
+          type: string
+          format: date-time
+        measure:
+          type: string
+        value:
+          type: number
+          format: float
+        thresholdBreached:
+          type: boolean
+        ownerId:
+          type: string
+        reviewDueBy:
+          type: string
+          format: date
+        sourceSystem:
+          type: string
+    SafetyEventLink:
+      type: object
+      required: [safetyEventRef, linkStrength]
+      properties:
+        id:
+          type: string
+        deploymentId:
+          type: string
+        safetyEventRef:
+          type: string
+          description: Identifier in the patient-safety event reporting system
+        linkStrength:
+          type: string
+          enum: [suspected, plausible, probable, confirmed, ruled_out]
+        harmLevel:
+          type: string
+          enum: [no_harm, near_miss, temporary_harm, permanent_harm, death]
+        reportedAt:
+          type: string
+          format: date-time
+        externalReportingRequired:
+          type: boolean
+          description: True where a device classification triggers post-market reporting
+        narrative:
+          type: string
+    AttributionRule:
+      type: object
+      required: [id, name, method]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        method:
+          type: string
+          enum: [pre_post_with_control, difference_in_differences, stepped_wedge, matched_cohort, counterfactual_estimate]
+        confoundersAddressed:
+          type: array
+          items:
+            type: string
+        agreedWith:
+          type: array
+          items:
+            type: string
+        agreedAt:
+          type: string
+          format: date-time
+    RealizedValueStatement:
+      type: object
+      required: [id, deploymentId, period, outcome]
+      properties:
+        id:
+          type: string
+        deploymentId:
+          type: string
+        period:
+          type: string
+        measure:
+          type: string
+        baselineValue:
+          type: number
+          format: float
+        observedValue:
+          type: number
+          format: float
+        hypothesisTarget:
+          type: number
+          format: float
+        outcome:
+          type: string
+          enum: [exceeded, met, partial, null_result, negative, unmeasurable]
+        attributionRuleId:
+          type: string
+        grossBenefit:
+          $ref: "#/components/schemas/Money"
+        totalCost:
+          $ref: "#/components/schemas/Money"
+        netBenefit:
+          $ref: "#/components/schemas/Money"
+        paymentRegime:
+          type: string
+          enum: [fee_for_service, value_based, mixed, administrative_cost]
+        caveats:
+          type: array
+          items:
+            type: string
+        reconciliations:
+          type: array
+          items:
+            type: object
+            properties:
+              signatory:
+                type: string
+              role:
+                type: string
+              signedAt:
+                type: string
+                format: date-time
+    DuplicationFinding:
+      type: object
+      required: [id, jobDescription, deploymentIds, status]
+      properties:
+        id:
+          type: string
+        jobDescription:
+          type: string
+        deploymentIds:
+          type: array
+          items:
+            type: string
+        combinedAnnualSpend:
+          $ref: "#/components/schemas/Money"
+        status:
+          type: string
+          enum: [open, decided, dismissed]
+        decision:
+          type: string
+          enum: [consolidate, coexist, defer]
+        retainedDeploymentId:
+          type: string
+        decidedBy:
+          type: string
+        rationale:
+          type: string
+    DisclosureRecord:
+      type: object
+      required: [audience, method]
+      properties:
+        id:
+          type: string
+        audience:
+          type: string
+          enum: [clinician_point_of_use, patient_notice, patient_consent, staff_training]
+        method:
+          type: string
+        contentSummary:
+          type: string
+        limitationsStated:
+          type: array
+          items:
+            type: string
+        effectiveFrom:
+          type: string
+          format: date
+        legalBasis:
+          type: string
+    DecommissionRecord:
+      type: object
+      required: [reason, decommissionedBy]
+      properties:
+        id:
+          type: string
+        reason:
+          type: string
+          enum: [no_measured_benefit, superseded, consolidated, safety_concern, vendor_exit, regulatory_change, contract_ended]
+        noFault:
+          type: boolean
+          default: true
+        cliniciansNotifiedAt:
+          type: string
+          format: date-time
+        workflowRevertedAt:
+          type: string
+          format: date-time
+        dataDisposition:
+          type: string
+          enum: [retained_in_record, archived, returned_to_vendor, destroyed]
+        contractTerminatedAt:
+          type: string
+          format: date
+        decommissionedBy:
+          type: string
+        finalValueStatementId:
+          type: string
+    PortfolioStatement:
+      type: object
+      required: [asOf, liveDeployments]
+      properties:
+        asOf:
+          type: string
+          format: date
+        liveDeployments:
+          type: integer
+        unregisteredDiscovered:
+          type: integer
+        withDetermination:
+          type: integer
+        withBaseline:
+          type: integer
+        unmeasurable:
+          type: integer
+        withSubgroupResults:
+          type: integer
+        monitoringLapsed:
+          type: integer
+        scopeCreepExceptions:
+          type: integer
+        deviceClassified:
+          type: integer
+        offLabelAccepted:
+          type: integer
+        netBenefitToDate:
+          $ref: "#/components/schemas/Money"
+        nullOrNegativeResults:
+          type: integer
+        retiredThisPeriod:
+          type: integer
+        vendorConcentrationTop:
+          type: string
+    DataEnvelopeDeployment:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/Deployment"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeDeploymentVersion:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/DeploymentVersion"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeDiscoveryFinding:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/DiscoveryFinding"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeRegulatoryDetermination:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/RegulatoryDetermination"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeIntendedUseRecord:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/IntendedUseRecord"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeValidationStudy:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/ValidationStudy"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeSubgroupResult:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/SubgroupResult"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeBenefitHypothesis:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/BenefitHypothesis"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeBaselineMeasurement:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/BaselineMeasurement"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeTotalCostOfOwnership:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/TotalCostOfOwnership"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeGateReview:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/GateReview"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeDeploymentScope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/DeploymentScope"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeMonitoringSignal:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/MonitoringSignal"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeSafetyEventLink:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/SafetyEventLink"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeAttributionRule:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/AttributionRule"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeRealizedValueStatement:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/RealizedValueStatement"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeDuplicationFinding:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/DuplicationFinding"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeDisclosureRecord:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/DisclosureRecord"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeDecommissionRecord:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/DecommissionRecord"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopePortfolioStatement:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/PortfolioStatement"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    ListEnvelopeDeployment:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Deployment"
+            nextCursor:
+              type: string
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    ListEnvelopeDeploymentVersion:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/DeploymentVersion"
+            nextCursor:
+              type: string
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    ListEnvelopeVendorRecord:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/VendorRecord"
+            nextCursor:
+              type: string
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    ListEnvelopeDiscoveryFinding:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/DiscoveryFinding"
+            nextCursor:
+              type: string
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    ListEnvelopeValidationStudy:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/ValidationStudy"
+            nextCursor:
+              type: string
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    ListEnvelopeGateReview:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/GateReview"
+            nextCursor:
+              type: string
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    ListEnvelopeMonitoringSignal:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/MonitoringSignal"
+            nextCursor:
+              type: string
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    ListEnvelopeAttributionRule:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/AttributionRule"
+            nextCursor:
+              type: string
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    ListEnvelopeRealizedValueStatement:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/RealizedValueStatement"
+            nextCursor:
+              type: string
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    ListEnvelopeDuplicationFinding:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/DuplicationFinding"
+            nextCursor:
+              type: string
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
